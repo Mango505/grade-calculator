@@ -1,6 +1,7 @@
 /**
- * app.js – Shell: router, mode switcher, dark mode, FAB, snackbar, skeletons
+ * app.js – Shell: router, mode switcher, user switcher, dark mode, FAB, snackbar, skeletons
  */
+import { openDialog } from "./components.js";
 
 const MODES = {
   grades: {
@@ -27,7 +28,9 @@ const MODES = {
 };
 
 const MODE_KEY = "nt-mode";
+const USER_KEY = "nt-user";
 let currentMode = localStorage.getItem(MODE_KEY) || "grades";
+let currentUser = localStorage.getItem(USER_KEY);
 
 const PAGES = {
   overview: { title: "Übersicht",      loader: () => import("/static/js/pages/overview.js") },
@@ -50,6 +53,81 @@ const mobFab         = document.getElementById("mobFab");
 // ---------------------------------------------------------------------------
 export function getCurrentMode() {
   return currentMode;
+}
+
+export function getCurrentUser() {
+  return currentUser;
+}
+
+function switchUser(name) {
+  if (name === currentUser) return;
+  currentUser = name;
+  localStorage.setItem(USER_KEY, name);
+  updateUserSwitcherUI();
+  closeUserDropdown();
+  renderPage(currentPageKey());
+}
+
+function updateUserSwitcherUI() {
+  const nameEl = document.getElementById("userSwitcherName");
+  if (nameEl) nameEl.textContent = currentUser;
+}
+
+async function renderUserSwitcher() {
+  let users;
+  try {
+    users = await apiFetch("/api/users");
+  } catch { return; }
+
+  if (!Array.isArray(users) || users.length === 0) return;
+
+  if (!users.includes(currentUser)) {
+    switchUser(users[0]);
+  }
+
+  const menu = document.getElementById("userSwitcherMenu");
+  if (!menu) return;
+
+  menu.innerHTML = users.map(function (name) {
+    return '<button class="user-switcher-item" data-user="' + name + '" role="menuitem">' +
+      '<span class="material-symbols-rounded">person</span>' +
+      '<span>' + name + '</span>' +
+      (name === currentUser
+        ? '<span class="material-symbols-rounded" style="margin-left:auto;font-size:18px">check</span>'
+        : "") +
+    '</button>';
+  }).join("") +
+    '<div class="user-switcher-divider"></div>' +
+    '<button class="user-switcher-item" id="userAddBtn" role="menuitem">' +
+      '<span class="material-symbols-rounded">add</span>' +
+      '<span>Benutzer hinzuf\u00fcgen\u2026</span>' +
+    '</button>';
+
+  menu.querySelectorAll("[data-user]").forEach(function (btn) {
+    btn.addEventListener("click", function () { switchUser(btn.dataset.user); });
+  });
+
+  menu.querySelector("#userAddBtn")?.addEventListener("click", function () {
+    closeUserDropdown();
+    showCreateUserDialog(false).then(function () { renderUserSwitcher(); });
+  });
+}
+
+function toggleUserDropdown() {
+  const overlay = document.getElementById("userSwitcherOverlay");
+  if (!overlay) return;
+  const hidden = overlay.hasAttribute("hidden");
+  if (hidden) {
+    renderUserSwitcher();
+    overlay.removeAttribute("hidden");
+  } else {
+    overlay.setAttribute("hidden", "");
+  }
+}
+
+function closeUserDropdown() {
+  const el = document.getElementById("userSwitcherOverlay");
+  if (el) el.setAttribute("hidden", "");
 }
 
 function switchMode(mode) {
@@ -116,6 +194,12 @@ document.getElementById("modeSwitcherMenu")?.addEventListener("click", e => e.st
 document.querySelectorAll("[data-mode]").forEach(btn => {
   btn.addEventListener("click", () => switchMode(btn.dataset.mode));
 });
+
+// User switcher
+document.getElementById("userSwitcherBtn")?.addEventListener("click", toggleUserDropdown);
+document.getElementById("userSwitcherMobile")?.addEventListener("click", toggleUserDropdown);
+document.getElementById("userSwitcherOverlay")?.addEventListener("click", closeUserDropdown);
+document.getElementById("userSwitcherMenu")?.addEventListener("click", e => e.stopPropagation());
 
 // ---------------------------------------------------------------------------
 // Router
@@ -224,7 +308,11 @@ mobFab?.addEventListener("click", () => _fabCallback?.());
 // API fetch helper
 // ---------------------------------------------------------------------------
 export async function apiFetch(url, options = {}) {
-  const res  = await fetch(url, {
+  const user = localStorage.getItem(USER_KEY);
+  if (!user && !url.startsWith("/api/users")) throw new Error("Kein Benutzer ausgew\u00e4hlt");
+  const sep = url.includes("?") ? "&" : "?";
+  const urlWithUser = user ? url + sep + "user=" + encodeURIComponent(user) : url;
+  const res  = await fetch(urlWithUser, {
     headers: { "Content-Type": "application/json", ...(options.headers ?? {}) },
     ...options,
   });
@@ -348,17 +436,24 @@ function applyTheme(pref) {
   if (labelEl) labelEl.textContent = isDark ? "Light Mode" : "Dark Mode";
 }
 
+export function setTheme(pref) {
+  localStorage.setItem(THEME_KEY, pref);
+  applyTheme(pref);
+}
+
+export function getThemePreference() {
+  return getThemePref();
+}
+
 function toggleTheme() {
   const pref    = getThemePref();
   const sysDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   const isDark  = pref === "dark" || (pref === "system" && sysDark);
   const next    = isDark ? "light" : "dark";
-  localStorage.setItem(THEME_KEY, next);
-  applyTheme(next);
+  setTheme(next);
 }
 
 document.getElementById("themeToggle")?.addEventListener("click", toggleTheme);
-document.getElementById("themeToggleMobile")?.addEventListener("click", toggleTheme);
 applyTheme(getThemePref());
 window.matchMedia("(prefers-color-scheme: dark)")
   .addEventListener("change", () => { if (getThemePref() === "system") applyTheme("system"); });
@@ -378,12 +473,227 @@ export function skeletonGrid(n = 3, lineClasses) {
 }
 
 // ---------------------------------------------------------------------------
+// First-start user creation helpers
+// ---------------------------------------------------------------------------
+
+function dialogPromise(headline, bodyHTML, confirmLabel, onOpen) {
+  return new Promise(function (resolve) {
+    const dlg = openDialog(headline, bodyHTML, confirmLabel);
+    if (onOpen) onOpen(dlg);
+    dlg.addEventListener("close", function () {
+      resolve({ confirmed: dlg.returnValue === "confirm", dlg: dlg });
+    });
+  });
+}
+
+var _IMPORT_ITEMS = [
+  { key: "grades",        cbId: "impGrades",  pathId: "impGradesPath",  label: "Noten" },
+  { key: "wallet",        cbId: "impWallet",  pathId: "impWalletPath",  label: "Guthaben & Logs" },
+  { key: "reward_config", cbId: "impRewards", pathId: "impRewardsPath", label: "Belohnungskonfiguration" },
+  { key: "tasks",         cbId: "impTasks",   pathId: "impTasksPath",   label: "Aufgaben" },
+];
+
+function renderImportOptions(dlg, sources) {
+  _IMPORT_ITEMS.forEach(function (item) {
+    var src = sources[item.key];
+    var cb = dlg.querySelector("#" + item.cbId);
+    var pathField = dlg.querySelector("#" + item.pathId);
+    if (!cb || !pathField) return;
+    var show = cb.checked;
+    pathField.style.display = show ? "block" : "none";
+    cb.addEventListener("change", function () {
+      pathField.style.display = cb.checked ? "block" : "none";
+    });
+  });
+}
+
+function importFileOptionsHTML(sources) {
+  var html = '<div style="margin-top:14px">' +
+    '<div style="font-size:13px;font-weight:500;margin-bottom:8px;color:var(--md-sys-color-on-surface-variant)">Vorhandene Daten importieren:</div>';
+  _IMPORT_ITEMS.forEach(function (item) {
+    var src = sources[item.key];
+    var existsText = (src && src.exists) ? ' <span style="color:var(--md-sys-color-tertiary);font-size:12px">(vorhanden)</span>' : " <span style=\"color:var(--md-sys-color-on-surface-variant);font-size:12px\">(nicht gefunden)</span>";
+    var pathVal = (src && src.path) ? src.path.replace(/&/g, "&amp;").replace(/"/g, "&quot;") : "";
+    html += '<label style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;font-size:14px;cursor:pointer">' +
+      '<md-checkbox id="' + item.cbId + '" touch-target="wrapper" style="flex-shrink:0"></md-checkbox>' +
+      '<span style="padding-top:3px">' + item.label + existsText + '</span>' +
+    '</label>';
+    html += '<md-outlined-text-field id="' + item.pathId + '" label="Pfad" style="width:100%;display:none;margin-bottom:4px" value="' + pathVal + '"></md-outlined-text-field>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function gatherImportData(dlg) {
+  var files = [];
+  var customPaths = {};
+  _IMPORT_ITEMS.forEach(function (item) {
+    var cb = dlg.querySelector("#" + item.cbId);
+    if (cb && cb.checked) {
+      files.push(item.key);
+      var pathField = dlg.querySelector("#" + item.pathId);
+      if (pathField && pathField.value && pathField.value.trim()) {
+        customPaths[item.key] = pathField.value.trim();
+      }
+    }
+  });
+  return { import_files: files, custom_paths: customPaths };
+}
+
+function _setCurrentUser(name) {
+  currentUser = name;
+  localStorage.setItem(USER_KEY, name);
+  updateUserSwitcherUI();
+}
+
+async function showCreateUserDialog(isFirst) {
+  var sources = {};
+  try {
+    var resp = await fetch("/api/import-sources");
+    sources = await resp.json();
+  } catch (e) {
+    sources = {};
+  }
+  const body = '<md-outlined-text-field id="newUserName" label="Name" style="width:100%"></md-outlined-text-field>' +
+    '<div style="margin-top:8px">' + importFileOptionsHTML(sources) + '</div>';
+  var result = await dialogPromise(
+    isFirst ? "Willkommen! Benutzer erstellen" : "Benutzer hinzuf\u00fcgen",
+    body,
+    "Erstellen",
+    function (dlg) {
+      renderImportOptions(dlg, sources);
+    }
+  );
+  if (!result.confirmed) {
+    if (isFirst) {
+      showSnackbar("Bitte einen Benutzer anlegen.", "error");
+      return showCreateUserDialog(true);
+    }
+    return;
+  }
+  var inp = result.dlg.querySelector("#newUserName");
+  var name = inp?.value?.trim();
+  if (!name) {
+    showSnackbar("Name eingeben.", "error");
+    return showCreateUserDialog(isFirst);
+  }
+  var payload = { name: name };
+  var importData = gatherImportData(result.dlg);
+  if (importData.import_files.length) {
+    payload.import_files = importData.import_files;
+    payload.custom_paths = importData.custom_paths;
+  }
+  try {
+    var data = await apiFetch("/api/users", { method: "POST", body: JSON.stringify(payload) });
+    _setCurrentUser(name);
+    if (data.imported && data.imported.length) {
+      showSnackbar("Benutzer '" + name + "' erstellt (" + data.imported.length + " Dateien importiert).");
+    } else {
+      showSnackbar("Benutzer '" + name + "' erstellt.");
+    }
+  } catch (e) {
+    showSnackbar(e.message, "error");
+    if (isFirst) return showCreateUserDialog(true);
+  }
+}
+
+async function showUserPickerDialog(users) {
+  var listHtml = users.map(function (name) {
+    return '<button class="user-switcher-item" data-user="' + name + '" style="font-size:15px;padding:14px 16px" role="menuitem">' +
+      '<span class="material-symbols-rounded">person</span><span>' + name + '</span>' +
+    '</button>';
+  }).join("");
+
+  var body = '<p style="font-size:14px;margin-bottom:12px">W\u00e4hle einen Benutzer:</p>' +
+    '<div style="display:flex;flex-direction:column;gap:4px">' + listHtml + '</div>' +
+    '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--md-sys-color-outline-variant)">' +
+      '<button class="user-switcher-item" id="pickerAddBtn" style="font-size:14px;padding:12px 16px" role="menuitem">' +
+        '<span class="material-symbols-rounded">add</span><span>Neuen Benutzer anlegen\u2026</span>' +
+      '</button>' +
+    '</div>';
+
+  const dlg = openDialog("Benutzer ausw\u00e4hlen", body);
+  return new Promise(function (resolve) {
+    var handled = false;
+
+    function done() {
+      if (handled) return;
+      handled = true;
+      dlg.close();
+      resolve();
+    }
+
+    dlg.querySelectorAll("[data-user]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        _setCurrentUser(btn.dataset.user);
+        done();
+      });
+    });
+
+    dlg.querySelector("#pickerAddBtn")?.addEventListener("click", async function () {
+      if (handled) return;
+      handled = true;
+      dlg.close();
+      await showCreateUserDialog(false);
+      if (localStorage.getItem(USER_KEY)) { resolve(); return; }
+      resolve(showUserPickerDialog(users));
+    });
+
+    dlg.addEventListener("close", function () {
+      dlg.remove();
+      if (!handled) {
+        handled = true;
+        if (localStorage.getItem(USER_KEY)) { resolve(); return; }
+        resolve(showUserPickerDialog(users));
+      }
+    });
+  });
+}
+
+async function ensureUser() {
+  var saved = localStorage.getItem(USER_KEY);
+  if (saved) {
+    currentUser = saved;
+    return;
+  }
+
+  var users;
+  try {
+    var resp = await fetch("/api/users");
+    users = await resp.json();
+  } catch {
+    users = [];
+  }
+
+  if (!Array.isArray(users) || users.length === 0) {
+    await showCreateUserDialog(true);
+  } else if (users.length === 1) {
+    _setCurrentUser(users[0]);
+  } else {
+    await showUserPickerDialog(users);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
-renderNavItems();
-updateModeSwitcherUI();
-renderPage(currentPageKey());
-checkStartupStatus();
-setTimeout(() => {
-  import("/static/js/tour.js").then(m => m.checkTour()).catch(() => {});
-}, 900);
+(async function boot() {
+  try {
+    await ensureUser();
+    renderNavItems();
+    updateModeSwitcherUI();
+    updateUserSwitcherUI();
+    renderPage(currentPageKey());
+    checkStartupStatus();
+    setTimeout(function () {
+      import("/static/js/tour.js").then(function (m) { return m.checkTour(); }).catch(function () {});
+    }, 900);
+  } catch (e) {
+    console.error("Boot failed:", e);
+    pageContainer.innerHTML =
+      '<div class="page-placeholder">' +
+        '<span class="material-symbols-rounded page-placeholder__icon" style="color:var(--md-sys-color-error)">error</span>' +
+        '<p>App konnte nicht gestartet werden: ' + e.message + '</p>' +
+      '</div>';
+  }
+})();

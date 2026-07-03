@@ -99,7 +99,7 @@ function _renderGradeChipsHtml() {
 }
 
 function renderGridContent(subjects) {
-  if (!subjects.length) return emptyState("library_books","Noch keine F\u00e4cher vorhanden.");
+  if (!subjects.length) return '<div style="grid-column:1/-1;display:flex;justify-content:center;padding:48px 0">'+emptyState("library_books","Noch keine F\u00e4cher vorhanden.")+'</div>';
   if (reorderMode)      return reorderList(subjects);
   return subjects.map(subjectCard).join("");
 }

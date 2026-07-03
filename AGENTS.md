@@ -8,6 +8,10 @@ Instructions for AI agents working on this repository.
 
 **grade-calculator** is a self-hosted Flask web app for tracking school grades (Bavarian 1–6 system) with an optional reward system. The web interface (`main` branch) is a Material Design 3 SPA backed by a Flask JSON API. The original CLI (`cli` branch) shares the same data layer.
 
+**Multi-User:** Each user's data lives in `data/users/<name>/`. On first start (no users exist), the app shows a user-creation dialog. Existing data from the old `Config.*_PATH` locations can be imported during user creation via `POST /api/users {name, import_files: ["grades", "wallet", ...]}`. The old `.env` path overrides (`GRADES_PATH`, `WALLET_PATH`) are only used for this import feature.
+
+**Import with custom paths:** When creating a user, the dialog shows a text field per importable file pre-filled with the default path (from `.env` or fallback). You can override any path before confirming. The frontend sends `custom_paths: {grades: "/custom/path.json"}` to `POST /api/users`. `GET /api/import-sources` returns all available files with their paths and existence status.
+
 ---
 
 ## Repository Layout
@@ -28,9 +32,10 @@ grades-and-chores-manager/
     ├── manifest.json       # PWA manifest
     ├── sw.js               # Service worker
     └── js/
-        ├── app.js          # Router, mode-switcher, exports: apiFetch, showSnackbar,
-        │                   #   setPrimaryAction, clearPrimaryAction, skeletonCard,
-        │                   #   skeletonGrid, navigateTo, getCurrentMode
+        ├── app.js          # Router, mode-switcher, user state (nt-user), exports: apiFetch,
+        │                   #   showSnackbar, setPrimaryAction, clearPrimaryAction,
+        │                   #   skeletonCard, skeletonGrid, navigateTo, getCurrentMode,
+        │                   #   setTheme, getThemePreference, switchUser
         ├── components.js   # openDialog, card, statChip, gradeBadge, emptyState,
         │                   #   errorBanner, injectComponentStyles, validateAll, validators
         ├── tour.js         # Onboarding tour: checkTour(), startTour()
@@ -46,8 +51,8 @@ grades-and-chores-manager/
 
 ## Strict Constraints
 
-### Never modify these files
-- `models.py` — shared with CLI, any change risks breaking the CLI branch
+### Modify rarely
+- `models.py` — shared with CLI (`cli` branch); only modify when strictly necessary and ensure backward compatibility
 - `storage.py` — same reason
 - `_env` — this is the committed template; `.env` is gitignored
 
@@ -64,7 +69,7 @@ grades-and-chores-manager/
 - All routes live in `app.py`; use `_load_all()` / `_save_all()` for data access — never call storage functions directly in route handlers
 - Return `jsonify(...)` for all API responses; use `abort(code, message)` for errors
 - The `book_reward` boolean field on `POST /api/subjects/:name/grades` controls whether the grade credits the wallet; default `True`
-- Path resolution: always use `Config.*_PATH` constants — never hardcode paths
+- Path resolution: use `Config.*_PATH` constants — paths under `data/users/<username>/` are resolved via `Config.USER_DIR(name)`. Old `GRADES_PATH`/`WALLET_PATH` overrides in `.env` are only used for the import feature on user creation
 
 ## JavaScript / Frontend
 
@@ -97,6 +102,14 @@ grades-and-chores-manager/
 - Cache name is `nr-shell-v3` / `nr-api-v3` — increment the version suffix when static assets change in a way that must invalidate existing caches
 - Shell assets list must be updated if new JS page files are added
 
+### User Switcher
+- User state lives in `localStorage["nt-user"]` (set key in `USER_KEY`)
+- `ensureUser()` runs during boot: if no user, calls `GET /api/users` — empty list shows a create dialog, otherwise shows a picker
+- The user can create a new user at any time via the settings page
+- Desktop: user switcher in `nav-drawer__footer`; Mobile: user icon in `top-app-bar__actions`
+- `switchUser(name)` sets `currentUser`, updates localStorage, and re-renders the current page
+- `apiFetch()` appends `?user=<currentUser>` to every API call — backend reads it from `request.args`
+
 ---
 
 ## API Contract
@@ -122,6 +135,8 @@ grades-and-chores-manager/
 | POST | `/api/reset` | `{action}` | See actions below |
 | GET | `/api/startup-status` | — | Load status of all 4 files |
 
+| GET | `/api/users` | — | Array of user names found in data/users/ |
+| POST | `/api/users` | `{name, import_files?, custom_paths?}` | Creates a new user dir; `custom_paths` overrides source paths per file key |
 | GET | `/api/tasks` | — | Templates + completions, each template has `available` |
 | POST | `/api/tasks` | `{name,reward,period?}` | period: once/daily/weekly/monthly |
 | PUT | `/api/tasks/<id>` | Partial update | |
@@ -184,5 +199,7 @@ TasksData(templates, completions, missed_log)
 1. **Nested template literals** — caused the entire app to stop loading (exports not found). Always use string concatenation for HTML with dynamic inner content.
 2. **`md-*` button margins** — the M3 web components ignore `margin` from stylesheets due to shadow DOM. Use `.btn-text`, `.btn-tonal`, `.btn-filled` native button classes instead.
 3. **`filter-mode-row` CSS** — the `#filterModeRow` div must have `class="filter-mode-row"` for the CSS `gap` to apply. Missing the class means the chips and radios clump together.
-4. **`_load_all()` on every request** — this is intentional; there is no in-memory state between requests. Do not cache loaded data across requests.
+4. **`_load_all()` on every request** — this is intentional; there is no in-memory state between requests. Do not cache loaded data across requests. `_load_all()` reads `request.args["user"]` to resolve paths.
 5. **`navigateTo` export** — `app.js` exports `navigateTo`; `tour.js` imports it dynamically (`import("/static/js/app.js")`) to avoid circular dependencies.
+6. **First-start dialog** — `ensureUser()` calls `fetch("/api/users")` directly (not `apiFetch`) because there's no user yet. If the user dismisses the create dialog, the app stays on the loading skeleton — the dialog is blocking (they must create or pick a user).
+7. **Service worker cache** — when making JS changes, bump the cache version suffix in `sw.js`. Users must hard-refresh (Ctrl+Shift+R) or close all tabs to get the new SW.

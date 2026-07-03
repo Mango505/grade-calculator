@@ -82,7 +82,8 @@ Everything is stored locally in JSON files on the server. The web interface is a
 
 ### App
 - Responsive Material Design 3 UI — nav drawer on desktop, bottom nav + FAB on mobile
-- Dark / light mode toggle (system preference + manual override)
+- Dark / light mode toggle (system preference + manual override in settings)
+- **Multi-User** — each user has isolated data files under `data/users/<name>/`; switch via dropdown in nav drawer or mobile top bar
 - 8-step onboarding tour on first launch, re-triggerable from settings
 - Verbose loading toggle, startup file status check
 - Backup as ZIP download, old backup cleanup
@@ -213,6 +214,8 @@ grades-and-chores-manager/
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/` | SPA shell (index.html) |
+| GET | `/api/users` | List all users |
+| POST | `/api/users` | Create user (with optional import) |
 | GET | `/api/subjects` | List all subjects |
 | POST | `/api/subjects` | Create subject |
 | DELETE | `/api/subjects/<name>` | Delete subject |
@@ -243,22 +246,21 @@ grades-and-chores-manager/
 
 ## Data Files 💾
 
-All data is stored as human-readable JSON. Default locations:
+All data is stored as human-readable JSON, isolated per user under `data/users/<username>/`:
 
 | File                      | Contents                                             |
 |---------------------------|------------------------------------------------------|
-| `data/grades.json`        | All subjects and their grades (value, weight, labels)|
-| `data/wallet.json`        | Balance, redemption log, grade change history        |
-| `data/reward_config.json` | Points map, reward mode, rate, unit name             |
-| `data/app_config.json`    | File paths, verbose loading flag                     |
-| `data/tasks.json`         | Tasks, completion history                            |
+| `data/users/<name>/grades.json`        | All subjects and their grades (value, weight, labels)|
+| `data/users/<name>/wallet.json`        | Balance, redemption log, grade change history        |
+| `data/users/<name>/reward_config.json` | Points map, reward mode, rate, unit name             |
+| `data/users/<name>/app_config.json`    | File paths, verbose loading flag                     |
+| `data/users/<name>/tasks.json`         | Tasks, completion history                            |
 
-Paths can be overridden via `.env` — useful for pointing the web app at existing CLI data files:
+Multi-user data directories are created automatically on first API call. Switch users via the dropdown in the nav drawer or mobile top bar.
 
-```ini
-GRADES_PATH=~/my_data/grades.json
-WALLET_PATH=~/my_data/wallet.json
-```
+> On the first start (no `data/users/` directory), the app shows a blocking dialog to create a user. Existing data from old CLI files can be imported during this step.
+
+Paths from `.env` (`GRADES_PATH`, `WALLET_PATH`) are only used for this **import-on-creation** feature — they are not used for regular operation. You can also type a custom path directly in the dialog.
 
 ---
 

@@ -1,9 +1,13 @@
 """
-app.py – Flask entry point. Replaces the CLI main.py.
-models.py and storage.py are kept unchanged.
+app.py – Flask entry point.
+Data is stored per user under data/users/<name>/.
+models.py and storage.py are shared with the CLI branch.
 """
 import io
+import json
 import os
+import re
+import shutil
 import zipfile
 from collections import Counter
 from datetime import datetime
@@ -22,30 +26,55 @@ from storage import (
 app = Flask(__name__)
 app.config.from_object(Config)
 
+
+# Return JSON for HTTP errors on /api/* routes
+@app.errorhandler(400)
+@app.errorhandler(404)
+@app.errorhandler(409)
+@app.errorhandler(500)
+def api_error_handler(e):
+    return jsonify({"error": e.description or str(e)}), e.code
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _load_all():
-    app_config, status = load_app_config(Config.APP_CONFIG_PATH)
+def _load_all(user=None):
+    if user is None:
+        user = request.args.get("user")
+        if not user:
+            abort(400, "user query parameter required")
 
-    def _resolve(p: str) -> str:
-        if os.path.isabs(p):
-            return p
-        return os.path.join(Config.DATA_DIR, os.path.basename(p))
+    user_dir = os.path.join(Config.DATA_DIR, "users", user)
+    os.makedirs(user_dir, exist_ok=True)
 
+    def _upath(filename: str) -> str:
+        return os.path.join(user_dir, filename)
+
+    grades_path        = _upath("grades.json")
+    wallet_path        = _upath("wallet.json")
+    reward_config_path = _upath("reward_config.json")
+    tasks_path         = _upath("tasks.json")
+    app_config_path    = _upath("app_config.json")
+    backup_path        = _upath("backups")
+
+    app_config, status = load_app_config(app_config_path)
     if status != LoadStatus.OK:
-        app_config.data_path          = Config.GRADES_PATH
-        app_config.wallet_path        = Config.WALLET_PATH
-        app_config.reward_config_path = Config.REWARD_CONFIG_PATH
-        app_config.tasks_path         = Config.TASKS_PATH
-        app_config.backup_path        = Config.BACKUP_PATH
-    else:
-        app_config.data_path          = _resolve(app_config.data_path)
-        app_config.wallet_path        = _resolve(app_config.wallet_path)
-        app_config.reward_config_path = _resolve(app_config.reward_config_path)
-        app_config.tasks_path         = _resolve(app_config.tasks_path)
-        app_config.backup_path        = _resolve(app_config.backup_path)
+        app_config = AppConfig(
+            data_path=grades_path,
+            wallet_path=wallet_path,
+            reward_config_path=reward_config_path,
+            tasks_path=tasks_path,
+            backup_path=backup_path,
+        )
+    # Always use deterministic paths within user directory
+    app_config.data_path          = grades_path
+    app_config.wallet_path        = wallet_path
+    app_config.reward_config_path = reward_config_path
+    app_config.tasks_path         = tasks_path
+    app_config.backup_path        = backup_path
+    app_config.app_config_path    = app_config_path
 
     subjects,      _ = load_subjects(app_config.data_path)
     wallet,        _ = load_wallet(app_config.wallet_path)
@@ -391,27 +420,30 @@ def startup_status():
                          load_wallet as _lw, load_reward_config as _lr,
                          load_tasks as _lt)
 
-    app_config_obj, ac_st = _lac(Config.APP_CONFIG_PATH)
+    user = request.args.get("user", "default")
+    user_dir = os.path.join(Config.DATA_DIR, "users", user)
 
-    def _res(p):
-        return p if os.path.isabs(p) else os.path.join(Config.DATA_DIR, os.path.basename(p))
+    def _upath(fn):
+        return os.path.join(user_dir, fn)
 
-    data_path   = _res(app_config_obj.data_path)
-    wallet_path = _res(app_config_obj.wallet_path)
-    rc_path     = _res(app_config_obj.reward_config_path)
-    tasks_path  = _res(app_config_obj.tasks_path)
+    ap = _upath("app_config.json")
+    dp = _upath("grades.json")
+    wp = _upath("wallet.json")
+    rp = _upath("reward_config.json")
+    tp = _upath("tasks.json")
 
-    _, s_st  = _ls(data_path)
-    _, w_st  = _lw(wallet_path)
-    _, rc_st = _lr(rc_path)
-    _, t_st  = _lt(tasks_path)
+    _, ac_st = _lac(ap)
+    _,  s_st = _ls(dp)
+    _,  w_st = _lw(wp)
+    _, rc_st = _lr(rp)
+    _,  t_st = _lt(tp)
 
     return jsonify({"files": [
-        {"name": "App-Konfiguration",       "path": Config.APP_CONFIG_PATH, "status": ac_st.value},
-        {"name": "Noten",                   "path": data_path,              "status": s_st.value},
-        {"name": "Wallet",                  "path": wallet_path,            "status": w_st.value},
-        {"name": "Belohnungskonfiguration", "path": rc_path,                "status": rc_st.value},
-        {"name": "Aufgaben",                "path": tasks_path,             "status": t_st.value},
+        {"name": "App-Konfiguration",       "path": ap, "status": ac_st.value},
+        {"name": "Noten",                   "path": dp, "status":  s_st.value},
+        {"name": "Wallet",                  "path": wp, "status":  w_st.value},
+        {"name": "Belohnungskonfiguration", "path": rp, "status": rc_st.value},
+        {"name": "Aufgaben",                "path": tp, "status":  t_st.value},
     ]})
 
 
@@ -682,6 +714,95 @@ def undo_task_completion(comp_id):
     wallet.balance -= comp.reward
     tasks.completions.pop(idx)
     _save_all(app_config, subjects, wallet, reward_config, tasks)
+    return "", 204
+
+
+# ---------------------------------------------------------------------------
+# API – Multi-User
+# ---------------------------------------------------------------------------
+
+@app.route("/api/users", methods=["GET"])
+def list_users():
+    users_dir = os.path.join(Config.DATA_DIR, "users")
+    if not os.path.exists(users_dir):
+        return jsonify([])
+    users = sorted([
+        d.name for d in os.scandir(users_dir)
+        if d.is_dir() and not d.name.startswith(".")
+    ])
+    return jsonify(users)
+
+
+@app.route("/api/import-sources", methods=["GET"])
+def import_sources():
+    result = {}
+    for key, (dst_name, src) in _IMPORTABLE_FILES.items():
+        result[key] = {
+            "filename": dst_name,
+            "path": src,
+            "exists": os.path.exists(src),
+        }
+    return jsonify(result)
+
+
+_IMPORTABLE_FILES = {
+    "grades":        ("grades.json",        Config.GRADES_PATH),
+    "wallet":        ("wallet.json",        Config.WALLET_PATH),
+    "reward_config": ("reward_config.json", Config.REWARD_CONFIG_PATH),
+    "tasks":         ("tasks.json",         Config.TASKS_PATH),
+    "app_config":    ("app_config.json",    os.path.join(Config.DATA_DIR, "app_config.json")),
+}
+
+
+@app.route("/api/users", methods=["POST"])
+def create_user():
+    data = request.get_json(force=True)
+    name = (data.get("name") or "").strip()
+    if not name or not re.match(r"^[a-zA-Z0-9_\u00e4\u00f6\u00fc\u00df -]+$", name):
+        abort(400, "Ung\u00fcltiger Benutzername (Buchstaben, Zahlen, _, -, Leerzeichen)")
+    user_dir = os.path.join(Config.DATA_DIR, "users", name)
+    if os.path.exists(user_dir):
+        abort(409, "Benutzer '" + name + "' existiert bereits")
+    os.makedirs(user_dir)
+
+    import_files = data.get("import_files") or []
+    custom_paths = data.get("custom_paths") or {}
+    imported = []
+    for key in import_files:
+        if key not in _IMPORTABLE_FILES:
+            continue
+        dst_name, src = _IMPORTABLE_FILES[key]
+        src = custom_paths.get(key, src)
+        src = os.path.abspath(os.path.expanduser(src))
+        if os.path.exists(src):
+            shutil.copy2(src, os.path.join(user_dir, dst_name))
+            imported.append(key)
+
+    # Create default config files for any not imported
+    for key, (dst_name, _) in _IMPORTABLE_FILES.items():
+        if key in imported:
+            continue
+        fp = os.path.join(user_dir, dst_name)
+        if not os.path.exists(fp):
+            default = {}
+            if dst_name == "reward_config.json":
+                default = RewardConfig().to_dict()
+            elif dst_name == "tasks.json":
+                default = TasksData().to_dict()
+            elif dst_name == "app_config.json":
+                default = AppConfig().to_dict()
+            with open(fp, "w") as f:
+                json.dump(default, f)
+
+    return jsonify({"name": name, "imported": imported}), 201
+
+
+@app.route("/api/users/<name>", methods=["DELETE"])
+def delete_user(name):
+    user_dir = os.path.join(Config.DATA_DIR, "users", name)
+    if not os.path.exists(user_dir):
+        abort(404, "Benutzer '" + name + "' nicht gefunden")
+    shutil.rmtree(user_dir)
     return "", 204
 
 

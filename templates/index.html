@@ -46,6 +46,13 @@
     <ul class="nav-drawer__list" id="navDrawerList" role="list"></ul>
 
     <div class="nav-drawer__footer">
+      <div class="user-switcher" id="userSwitcher">
+        <button class="user-switcher__btn" id="userSwitcherBtn" aria-label="Benutzer wechseln">
+          <span class="material-symbols-rounded">account_circle</span>
+          <span class="user-switcher__name" id="userSwitcherName">default</span>
+          <span class="material-symbols-rounded user-switcher__chevron">expand_more</span>
+        </button>
+      </div>
       <button class="theme-toggle" id="themeToggle" aria-label="Design wechseln">
         <span class="material-symbols-rounded" id="themeIcon">dark_mode</span>
         <span id="themeLabel">Dark Mode</span>
@@ -66,8 +73,8 @@
         <span class="material-symbols-rounded top-app-bar__chevron" id="topSwitcherChevron">expand_more</span>
       </div>
       <div class="top-app-bar__actions">
-        <button class="icon-btn" id="themeToggleMobile" aria-label="Design wechseln">
-          <span class="material-symbols-rounded" id="themeIconMobile">dark_mode</span>
+        <button class="icon-btn" id="userSwitcherMobile" aria-label="Benutzer wechseln">
+          <span class="material-symbols-rounded" id="userIconMobile">account_circle</span>
         </button>
       </div>
     </header>
@@ -110,6 +117,13 @@
           <div class="mode-switcher-item__sub">Aufgaben &amp; Haushalt</div>
         </div>
       </button>
+    </div>
+  </div>
+
+  <!-- User switcher dropdown -->
+  <div class="user-switcher-overlay" id="userSwitcherOverlay" hidden>
+    <div class="user-switcher-menu" id="userSwitcherMenu" role="menu">
+      <!-- populated dynamically from /api/users -->
     </div>
   </div>
 

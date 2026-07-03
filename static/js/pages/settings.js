@@ -1,7 +1,7 @@
 /**
  * settings.js – Stack-based sub-navigation
  */
-import { apiFetch, showSnackbar, clearPrimaryAction } from "../app.js";
+import { apiFetch, showSnackbar, clearPrimaryAction, setTheme, getThemePreference } from "../app.js";
 import { errorBanner, openDialog, injectComponentStyles } from "../components.js";
 
 let stack = ["main"];
@@ -19,6 +19,7 @@ async function renderCurrent(container) {
   else if (page === "rewards") await renderRewards(container);
   else if (page === "paths")   await renderPaths(container);
   else if (page === "loading") await renderLoading(container);
+  else if (page === "theme")   renderTheme(container);
   else if (page === "reset")   renderReset(container);
 }
 
@@ -38,6 +39,7 @@ function renderMain(container) {
       item("Belohnungssystem","redeem",      "rewards","Punkte, Modus, Belohnungen") +
       item("Datenpfade",      "folder",       "paths",  "Speicherorte der JSON-Dateien") +
       item("Ladehinweise",    "notifications","loading","Verbose-Loading ein-/ausschalten") +
+      item("Design",          "palette",      "theme",  "Dark-/Light-Modus w\u00e4hlen") +
       item("Backup & Reset",  "restart_alt",  "reset",  "Backup, Logs leeren, Daten zur\u00fccksetzen") +
       item("App-Tour starten","flag",         "tour",   "Einf\u00fchrung erneut anzeigen") +
     '</div>';
@@ -211,6 +213,49 @@ async function renderLoading(container) {
   div.querySelector("#swVerbose").addEventListener("change", async e=>{
     try { await apiFetch("/api/app-config",{method:"PATCH",body:JSON.stringify({verbose_loading:e.target.selected})}); showSnackbar(e.target.selected?"Ladehinweise aktiviert.":"Ladehinweise deaktiviert."); await renderLoading(container); }
     catch(err) { showSnackbar(err.message,"error"); }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Design / Theme
+// ---------------------------------------------------------------------------
+function renderTheme(container) {
+  container.innerHTML = backBar("Design");
+  bindBack(container);
+
+  const current = getThemePreference();
+  const options = [
+    { value: "system", label: "System", icon: "desktop_windows", desc: "Folgt dem Betriebssystem" },
+    { value: "light",  label: "Hell",   icon: "light_mode",      desc: "Helles Design immer" },
+    { value: "dark",   label: "Dunkel", icon: "dark_mode",       desc: "Dunkles Design immer" },
+  ];
+
+  const cards = options.map(function (o) {
+    const active = o.value === current;
+    return '<div class="card theme-option' + (active ? " theme-option--active" : "") + '" data-theme="' + o.value + '" style="margin-bottom:8px;cursor:pointer;transition:background .15s;' + (active ? 'border-color:var(--md-sys-color-primary)' : '') + '">' +
+      '<div style="display:flex;align-items:center;gap:14px">' +
+        '<span class="material-symbols-rounded" style="font-size:24px;color:' + (active ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-on-surface-variant)') + '">' + o.icon + '</span>' +
+        '<div style="flex:1">' +
+          '<div style="font-size:15px;font-weight:500">' + o.label + '</div>' +
+          '<div style="font-size:12px;color:var(--md-sys-color-on-surface-variant);margin-top:2px">' + o.desc + '</div>' +
+        '</div>' +
+        (active
+          ? '<span class="material-symbols-rounded" style="color:var(--md-sys-color-primary)">check_circle</span>'
+          : '<span class="material-symbols-rounded" style="color:var(--md-sys-color-on-surface-variant)">radio_button_unchecked</span>') +
+      '</div>' +
+    '</div>';
+  }).join("");
+
+  const div = document.createElement("div");
+  div.innerHTML = cards;
+  container.appendChild(div);
+
+  div.querySelectorAll(".theme-option").forEach(function (card) {
+    card.addEventListener("click", function () {
+      const val = card.dataset.theme;
+      setTheme(val);
+      renderTheme(container);
+    });
   });
 }
 

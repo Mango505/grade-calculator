@@ -135,7 +135,7 @@ function _showStep(index) {
           '<button id="tourNext" style="padding:10px 28px;border-radius:50px;border:none;' +
           'background:var(--md-sys-color-primary);color:var(--md-sys-color-on-primary);' +
           'cursor:pointer;font-size:14px;font-weight:600;font-family:inherit;transition:opacity .15s">' +
-          (isLast ? "Fertig \u2713" : "Weiter \u203a") + '</button>' +
+          (isLast ? "Fertig \u2713" : "Weiter") + '</button>' +
         '</div>' +
       '</div>' +
     '</div>';
