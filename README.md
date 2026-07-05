@@ -86,7 +86,7 @@ Everything is stored locally in JSON files on the server. The web interface is a
 - **Multi-User** — each user has isolated data files under `data/users/<name>/`; switch via dropdown in nav drawer or mobile top bar
 - 8-step onboarding tour on first launch, re-triggerable from settings
 - Verbose loading toggle, startup file status check
-- Backup as ZIP download, old backup cleanup
+- Backup as ZIP download
 
 ---
 
@@ -123,9 +123,10 @@ HOST=127.0.0.1      # use 0.0.0.0 to expose on your network (e.g. for mobile acc
 PORT=5000
 FLASK_DEBUG=1       # set to 0 in production
 
-# Optional: point to existing CLI data files
-GRADES_PATH=~/grades.json
-WALLET_PATH=~/wallet.json
+# Import source paths – only used when creating a new user and importing
+# existing data. Can also be overridden per-file in the dialog.
+#GRADES_PATH=~/grades.json
+#WALLET_PATH=~/wallet.json
 ```
 
 > **Note:** Always use `python app.py` to start the server — not `flask run`. The app reads `HOST` and `PORT` from `.env` via `python-dotenv`; `flask run` uses different variable names and will ignore them.
@@ -232,7 +233,6 @@ grades-and-chores-manager/
 | GET | `/api/app-config` | Get app config |
 | PATCH | `/api/app-config` | Update app config |
 | GET | `/api/backup` | Download ZIP backup |
-| POST | `/api/backups/cleanup` | Clean old backups |
 | GET | `/api/startup-status` | Load status of all files |
 | POST | `/api/reset` | Reset logs / config |
 | GET | `/api/tasks` | List task templates + completions |
@@ -269,7 +269,8 @@ Paths from `.env` (`GRADES_PATH`, `WALLET_PATH`) are only used for this **import
 Both are accessible from **Settings → Backup & Reset**:
 
 - **Backup** — downloads all five data files as a single ZIP (`noten_taschengeld_backup_YYYYMMDD_HHMMSS.zip`)
-- **Alte Backups löschen** — keeps only the most recent backup folder, deletes the rest (`data/backups/)
+
+Before any reset action, the confirmation dialog recommends downloading a backup first.
 
 Individual reset actions (each requires confirmation):
 

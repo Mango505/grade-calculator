@@ -269,11 +269,7 @@ function renderReset(container) {
     '<div class="card" style="margin-bottom:12px">' +
       '<div style="font-size:15px;font-weight:500;margin-bottom:8px">Backup</div>' +
       '<p style="font-size:13px;color:var(--md-sys-color-on-surface-variant);margin-bottom:12px">L\u00e4dt alle Datendateien als ZIP herunter.</p>' +
-      '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
-        '<button class="btn-tonal" id="btnBackup"><span class="material-symbols-rounded">download</span>Backup herunterladen</button>' +
-        '<button class="btn-tonal" id="btnCleanup" style="background:var(--md-sys-color-surface-container-high);color:var(--md-sys-color-on-surface)">' +
-          '<span class="material-symbols-rounded">auto_delete</span>Alte Backups l\u00f6schen</button>' +
-      '</div>' +
+      '<button class="btn-tonal" id="btnBackup"><span class="material-symbols-rounded">download</span>Backup herunterladen</button>' +
     '</div>' +
     '<div class="card" style="border:1px solid var(--md-sys-color-error-container)">' +
       '<div style="font-size:15px;font-weight:500;color:var(--md-sys-color-error);margin-bottom:12px">Gefahrenzone</div>' +
@@ -287,11 +283,7 @@ function renderReset(container) {
     '</div>';
   container.appendChild(div);
 
-  div.querySelector("#btnBackup").addEventListener("click",()=>{ const a=Object.assign(document.createElement("a"),{href:"/api/backup"}); document.body.appendChild(a);a.click();a.remove(); showSnackbar("Backup wird heruntergeladen\u2026"); });
-  div.querySelector("#btnCleanup").addEventListener("click",()=>{
-    const dlg=openDialog("Alte Backups l\u00f6schen",'<p style="font-size:14px">Alle Backups au\u00dfer dem neuesten werden gel\u00f6scht.</p>',"L\u00f6schen",true);
-    dlg.addEventListener("close",async()=>{ if (dlg.returnValue!=="confirm") return; try { const r=await apiFetch("/api/backups/cleanup",{method:"POST"}); showSnackbar(r.message??"Gel\u00f6scht."); } catch(e){showSnackbar(e.message,"error");} });
-  });
+  div.querySelector("#btnBackup").addEventListener("click",()=>{ const user=localStorage.getItem("nt-user"); const a=Object.assign(document.createElement("a"),{href:"/api/backup?user="+encodeURIComponent(user)}); document.body.appendChild(a);a.click();a.remove(); showSnackbar("Backup wird heruntergeladen\u2026"); });
   [["rGradeLog","grade_log","Noten\u00e4nderungen-Log leeren?"],
    ["rRedemptions","redemptions","Einl\u00f6sungen-Log leeren?\nDas Guthaben wird nicht ver\u00e4ndert."],
    ["rBalance","balance","Guthaben auf 0 zur\u00fccksetzen?\nLogs bleiben erhalten."],
@@ -301,7 +293,10 @@ function renderReset(container) {
    ["rTasks","tasks","Aufgaben-Vorlagen zur\u00fccksetzen?\nAlle Vorlagen und Logs werden gel\u00f6scht."],
   ].forEach(([id,action,msg])=>{
     div.querySelector("#"+id).addEventListener("click",()=>{
-      const dlg=openDialog("Best\u00e4tigung",'<p style="font-size:14px">'+msg.replace(/\n/g,"<br>")+'</p>',"Zur\u00fccksetzen",true);
+      const dlg=openDialog("Best\u00e4tigung",'<p style="font-size:14px;margin-bottom:12px;line-height:1.5">'+msg.replace(/\n/g,"<br>")+'</p><div style="font-size:14px;padding:12px;background:color-mix(in srgb,var(--md-sys-color-error) 8%,var(--md-sys-color-surface));border:1px solid var(--md-sys-color-error-container);border-radius:8px;display:flex;align-items:flex-start;gap:10px"><span class="material-symbols-rounded" style="color:var(--md-sys-color-error);flex-shrink:0;margin-top:1px">warning</span><div><strong>DIES KANN NICHT R\u00dcCKG\u00c4NGIG GEMACHT WERDEN!</strong><br><span style="color:var(--md-sys-color-on-surface-variant)">Es empfiehlt sich, vorher ein <button class="btn-text" id="dlBackup" style="font-size:14px;padding:0;min-width:0;color:var(--md-sys-color-primary);text-decoration:underline;cursor:pointer;background:none;border:none;font-family:inherit">Backup herunterzuladen</button>.</span></div></div>',"Zur\u00fccksetzen",true);
+      document.getElementById("app-dialog")?.querySelector("#dlBackup")?.addEventListener("click",()=>{
+        const u=localStorage.getItem("nt-user"); const a=document.createElement("a"); a.href="/api/backup?user="+encodeURIComponent(u); document.body.appendChild(a); a.click(); a.remove();
+      });
       dlg.addEventListener("close",async()=>{ if (dlg.returnValue!=="confirm") return; try { await apiFetch("/api/reset",{method:"POST",body:JSON.stringify({action})}); showSnackbar("Zur\u00fcckgesetzt."); } catch(e){showSnackbar(e.message,"error");} });
     });
   });

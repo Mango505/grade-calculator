@@ -131,7 +131,6 @@ grades-and-chores-manager/
 | GET | `/api/overview` | — | Aggregated averages |
 | GET | `/api/export` | — | Full data for TXT export |
 | GET | `/api/backup` | — | ZIP download |
-| POST | `/api/backups/cleanup` | — | Keeps newest backup only |
 | POST | `/api/reset` | `{action}` | See actions below |
 | GET | `/api/startup-status` | — | Load status of all 4 files |
 

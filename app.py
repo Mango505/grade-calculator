@@ -498,40 +498,7 @@ def update_app_config():
     return jsonify(app_config.to_dict())
 
 
-# ---------------------------------------------------------------------------
-# API – Backup cleanup
-# ---------------------------------------------------------------------------
 
-@app.route("/api/backups/cleanup", methods=["POST"])
-def cleanup_backups():
-    import shutil
-    app_config, _, _, _, _ = _load_all()
-    backup_path = app_config.backup_path
-
-    if not os.path.exists(backup_path):
-        return jsonify({"message": "Kein Backup-Verzeichnis gefunden.", "deleted": 0})
-
-    entries = sorted(
-        [e for e in os.scandir(backup_path) if e.is_dir() and e.name.startswith("backup_")],
-        key=lambda e: e.name
-    )
-
-    if len(entries) <= 1:
-        return jsonify({"message": "Nur ein Backup vorhanden, nichts zu löschen.", "deleted": 0})
-
-    to_delete = entries[:-1]
-    failed, deleted = [], 0
-    for e in to_delete:
-        try:
-            shutil.rmtree(e.path)
-            deleted += 1
-        except OSError:
-            failed.append(e.name)
-
-    msg = f"{deleted} altes Backup/Backups gelöscht."
-    if failed:
-        msg += f" Fehlgeschlagen: {', '.join(failed)}"
-    return jsonify({"message": msg, "deleted": deleted, "failed": failed})
 
 
 # ---------------------------------------------------------------------------
@@ -745,11 +712,18 @@ def import_sources():
     return jsonify(result)
 
 
+def _import_source(env_key: str, filename: str) -> str:
+    raw = os.getenv(env_key)
+    if raw:
+        return os.path.abspath(os.path.expanduser(raw))
+    return os.path.join(Config.DATA_DIR, filename)
+
+
 _IMPORTABLE_FILES = {
-    "grades":        ("grades.json",        Config.GRADES_PATH),
-    "wallet":        ("wallet.json",        Config.WALLET_PATH),
-    "reward_config": ("reward_config.json", Config.REWARD_CONFIG_PATH),
-    "tasks":         ("tasks.json",         Config.TASKS_PATH),
+    "grades":        ("grades.json",        _import_source("GRADES_PATH", "grades.json")),
+    "wallet":        ("wallet.json",        _import_source("WALLET_PATH", "wallet.json")),
+    "reward_config": ("reward_config.json", _import_source("REWARD_CONFIG_PATH", "reward_config.json")),
+    "tasks":         ("tasks.json",         _import_source("TASKS_PATH", "tasks.json")),
     "app_config":    ("app_config.json",    os.path.join(Config.DATA_DIR, "app_config.json")),
 }
 

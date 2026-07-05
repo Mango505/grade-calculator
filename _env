@@ -1,0 +1,14 @@
+# Flask
+HOST=127.0.0.1      # use 0.0.0.0 to expose on your network (e.g. for mobile access)
+PORT=5000
+FLASK_DEBUG=1       # set to 0 in production
+SECRET_KEY=dev-secret-change-in-prod
+
+# Data directory – where the app lives; defaults to ./data.
+# Relative paths are resolved from the directory where you run "python app.py".
+#DATA_DIR=./data
+
+# Import source paths – ONLY used when creating a new user and importing
+# existing data. You can also override the path per-file in the dialog.
+#GRADES_PATH=~/grades.json
+#WALLET_PATH=~/wallet.json

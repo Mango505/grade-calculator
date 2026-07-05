@@ -2,7 +2,7 @@
 *.json
 !manifest.json
 export*.txt
-backup_*
+backup*
 .env
 
 # Created by https://www.toptal.com/developers/gitignore/api/windows,python
