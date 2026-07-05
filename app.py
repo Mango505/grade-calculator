@@ -57,7 +57,6 @@ def _load_all(user=None):
     reward_config_path = _upath("reward_config.json")
     tasks_path         = _upath("tasks.json")
     app_config_path    = _upath("app_config.json")
-    backup_path        = _upath("backups")
 
     app_config, status = load_app_config(app_config_path)
     if status != LoadStatus.OK:
@@ -66,14 +65,12 @@ def _load_all(user=None):
             wallet_path=wallet_path,
             reward_config_path=reward_config_path,
             tasks_path=tasks_path,
-            backup_path=backup_path,
         )
     # Always use deterministic paths within user directory
     app_config.data_path          = grades_path
     app_config.wallet_path        = wallet_path
     app_config.reward_config_path = reward_config_path
     app_config.tasks_path         = tasks_path
-    app_config.backup_path        = backup_path
     app_config.app_config_path    = app_config_path
 
     subjects,      _ = load_subjects(app_config.data_path)
@@ -468,7 +465,6 @@ def reset_data():
             data_path=app_config.data_path,
             wallet_path=app_config.wallet_path,
             reward_config_path=app_config.reward_config_path,
-            backup_path=app_config.backup_path,
         )
     elif action == "reward_config":
         reward_config = RewardConfig()

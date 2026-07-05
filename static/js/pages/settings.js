@@ -191,7 +191,7 @@ async function renderPaths(container) {
   catch(e) { container.innerHTML += errorBanner(e.message); return; }
   const p=(label,val)=>'<div style="margin-bottom:14px"><div style="font-size:12px;color:var(--md-sys-color-on-surface-variant);margin-bottom:2px">'+label+'</div><code style="font-size:13px;word-break:break-all;display:block">'+val+'</code></div>';
   const div=document.createElement("div"); div.className="card";
-  div.innerHTML=p("Noten",appCfg.data_path)+p("Wallet",appCfg.wallet_path)+p("Aufgaben",appCfg.tasks_path)+p("Belohnungskonfig",appCfg.reward_config_path)+p("App-Konfiguration",appCfg.app_config_path)+p("Backups",appCfg.backup_path)+
+  div.innerHTML=p("Noten",appCfg.data_path)+p("Wallet",appCfg.wallet_path)+p("Aufgaben",appCfg.tasks_path)+p("Belohnungskonfig",appCfg.reward_config_path)+p("App-Konfiguration",appCfg.app_config_path)+
     '<p style="font-size:13px;color:var(--md-sys-color-on-surface-variant);margin-top:8px">Pfade \u00fcber <code>DATA_DIR</code> in <code>.env</code> konfigurierbar.</p>';
   container.appendChild(div);
 }

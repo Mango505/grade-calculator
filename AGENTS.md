@@ -165,7 +165,7 @@ RewardConfig(enabled, points_map, money_per_point, reward_mode, unit_name, unit_
   # reward_mode: "money" | "unit" | "points"
   # points_map: {int grade → int points}
 
-AppConfig(data_path, wallet_path, reward_config_path, backup_path, verbose_loading)
+AppConfig(data_path, wallet_path, reward_config_path, verbose_loading)
 
 TaskTemplate(name, reward, period, active, last_completed, interval, weekdays, month_day)
   # period: "once" | "daily" | "weekly" | "monthly"
