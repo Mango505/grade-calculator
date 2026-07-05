@@ -1,6 +1,6 @@
 # grades-and-chores-manager
 
-![Version](https://img.shields.io/badge/version-v3.1.1-brightgreen)
+![Version](https://img.shields.io/badge/version-v3.2.0-brightgreen)
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
 ![Flask](https://img.shields.io/badge/flask-3.0+-lightgrey)
 ![Status](https://img.shields.io/badge/status-web%20interface-blue)
